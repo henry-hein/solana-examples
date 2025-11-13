@@ -11,7 +11,7 @@
 #![allow(unexpected_cfgs)] // Compiler flag to ignore warnings about unexpected configurations
 
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{self, system_instruction}; // Import the native Solana program library and system instructions
+use anchor_lang::system_program; // Anchor's idiomatic wrapper for the System Program
 
 declare_id!("FgVJ3gHPMw5ZCgZYyY4gExtdYQYnma4gG7Z3QzaF6DSN"); // Program's unique address (ID) on the Solana network
 
@@ -24,30 +24,19 @@ pub mod presale_program {
     pub fn buy_presale_tokens(ctx: Context<CreateUserAccount>, amount: u64) -> Result<()> {
         
         let user_account = &mut ctx.accounts.user_account; // Get mutable reference to the UserAccount PDA
-        let sol_sender = &mut ctx.accounts.signer; 
-        let vault_wallet = &mut ctx.accounts.vault_wallet; // The recipient account (SOL destination)
 
         // Update the program state by increasing the counter
         user_account.tokens_assigned += amount; 
         
-        // 1. Construct the native Solana System Program transfer instruction
-        let instruction =
-            system_instruction::transfer(
-                &sol_sender.key(), // Source of SOL (Signer/User)
-                &vault_wallet.key(),     // Destination of SOL (Vault)
-                (amount * 10_000_000).into(), // Calculate lamport amount (amount * 0.01 SOL)
-            );
-
-        // 2. Perform a Cross-Program Invocation (CPI) to the System Program
-        solana_program::program::invoke(
-            &instruction, // The transfer instruction created above
-            &[
-                // Accounts required by the System Program transfer instruction:
-                sol_sender.to_account_info(), // The source account (must be mutable and signer)
-                vault_wallet.to_account_info(), // The destination account (must be mutable if being created, but must be passed here)
-                ctx.accounts.system_program.to_account_info(), // The System Program itself
-            ],
-        )?; // The '?' operator handles errors from the invocation
+        let cpi_context = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.signer.to_account_info(),
+                to: ctx.accounts.vault_wallet.to_account_info(),
+            },
+        );
+        
+        system_program::transfer(cpi_context, (amount * 10_000_000).into())?;
 
         Ok(()) // Return success
     }
@@ -80,6 +69,8 @@ pub struct CreateUserAccount<'info> {
     /// The native Solana System Program account (required for creating accounts and transfers)
     pub system_program: Program<'info, System>,
 }
+
+// --- DATA STRUCTURE ---
 
 // Data structure for the UserAccount PDA
 #[account]

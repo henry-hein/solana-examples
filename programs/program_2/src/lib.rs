@@ -2,7 +2,11 @@
 // This program facilitates a presale purchase.
 // 1. **Initializes a Program Derived Address (PDA)** named `UserAccount` using the client's public key (`user`) as a seed. 
 //    This PDA is used to **store the total quantity of presale units (tokens_assigned)** purchased by the client.
-// 2. **Executes a Cross-Program Invocation (CPI)** to the native System Program to transfer the calculated amount of native SOL (lamports) from the **3rd-party service's wallet ('signer')** into the designated **Vault Wallet**.
+// 2. **Executes a Cross-Program Invocation (CPI)** to the native System Program to transfer the calculated amount of native SOL (lamports) 
+//    from the **Client's wallet ('signer')** into the designated **Vault Wallet**.
+
+// change directory from root to programs/program_2 then run ***anchor build***
+// go back to root then run ***solana program deploy target/deploy/program_2.so
 
 #![allow(unexpected_cfgs)] // Compiler flag to ignore warnings about unexpected configurations
 
@@ -16,20 +20,21 @@ pub mod presale_program {
 
     use super::*;
 
-    /// Instruction to initialize a UserAccount PDA and transfer SOL to the user
-    pub fn buy_presale_tokens(ctx: Context<CreateUserAccount>, amount: u32) -> Result<()> {
+    /// Instruction to initialize a UserAccount PDA and receive SOL from the user
+    pub fn buy_presale_tokens(ctx: Context<CreateUserAccount>, amount: u64) -> Result<()> {
+        
         let user_account = &mut ctx.accounts.user_account; // Get mutable reference to the UserAccount PDA
-        let sender = &mut ctx.accounts.signer; // Get mutable reference to the transaction signer (SOL source)
-        let vault_wallet = &mut ctx.accounts.vault_wallet; // Get mutable reference to the recipient account (SOL destination)
+        let sol_sender = &mut ctx.accounts.signer; 
+        let vault_wallet = &mut ctx.accounts.vault_wallet; // The recipient account (SOL destination)
 
         // Update the program state by increasing the counter
         user_account.tokens_assigned += amount; 
-
+        
         // 1. Construct the native Solana System Program transfer instruction
         let instruction =
             system_instruction::transfer(
-                &sender.key(), // Source of SOL (Signer)
-                &vault_wallet.key,     // Destination of SOL (User)
+                &sol_sender.key(), // Source of SOL (Signer/User)
+                &vault_wallet.key(),     // Destination of SOL (Vault)
                 (amount * 10_000_000).into(), // Calculate lamport amount (amount * 0.01 SOL)
             );
 
@@ -38,8 +43,8 @@ pub mod presale_program {
             &instruction, // The transfer instruction created above
             &[
                 // Accounts required by the System Program transfer instruction:
-                sender.to_account_info(), // The source account (must be mutable and signer)
-                vault_wallet.to_account_info(), // The destination account (must be mutable)
+                sol_sender.to_account_info(), // The source account (must be mutable and signer)
+                vault_wallet.to_account_info(), // The destination account (must be mutable if being created, but must be passed here)
                 ctx.accounts.system_program.to_account_info(), // The System Program itself
             ],
         )?; // The '?' operator handles errors from the invocation
@@ -51,12 +56,14 @@ pub mod presale_program {
 // Account validation and context structure for the instruction
 #[derive(Accounts)]
 pub struct CreateUserAccount<'info> {
-    /// CHECK: The signer pays for the transaction and the SOL transfer
+    // wert wallet that transfers and pays for transaction fee
     #[account(mut)]
     pub signer: Signer<'info>, 
     
+    /// The user account whose key is used as the PDA seed. Must be a SystemAccount.
     pub user: SystemAccount<'info>, 
 
+    /// The program's Vault/Treasury account receiving the SOL
     #[account(mut)]
     pub vault_wallet: SystemAccount<'info>,
     
@@ -68,7 +75,6 @@ pub struct CreateUserAccount<'info> {
         seeds = [user.key().as_ref()], // Derives the address using the 'user' key as a seed
         bump // Stores the PDA's bump seed
     )]
-    
     pub user_account: Account<'info, UserAccount>,
     
     /// The native Solana System Program account (required for creating accounts and transfers)
@@ -79,5 +85,5 @@ pub struct CreateUserAccount<'info> {
 #[account]
 #[derive(InitSpace)]
 pub struct UserAccount {
-    pub tokens_assigned: u32, // A counter field to track assigned tokens/amounts
+    pub tokens_assigned: u64, // A counter field to track assigned tokens/amounts
 }

@@ -26,8 +26,10 @@ function createBuyPresaleTokensInstruction(userAddress: PublicKeyInitData, amoun
   // get from /target/idl/presale_program.json
   const discriminator = Buffer.from([251, 8, 216, 45, 205, 249, 65, 247]);
 
-  // 4 bytes: amount as u32 (Number to 4-byte buffer, little-endian)
-  const amountBytes = Buffer.from(new Uint8Array(new Uint32Array([amount]).buffer));
+  // 8 bytes: amount as u64 (Number to 8-byte buffer, little-endian)
+  const amountBytes = Buffer.alloc(8);
+        //@ts-expect-error
+        amountBytes.writeBigUInt64LE(BigInt(amount), 0); 
 
   const instructionData = Buffer.concat([
     discriminator,
@@ -35,25 +37,25 @@ function createBuyPresaleTokensInstruction(userAddress: PublicKeyInitData, amoun
   ]);
 
   const signer = new PublicKey("BGCSawehjnxUDciqRCPfrXqzKvBeiTSe3mEtvTFC5d9q"); 
-  
-  const vault_address = new PublicKey("FycJCFpjVBiwn2JNDbh1BNe4EuCjyTh2fCvGzMWAX5nD");
+  // const vault_address = new PublicKey("FycJCFpjVBiwn2JNDbh1BNe4EuCjyTh2fCvGzMWAX5nD");
+  const vault_address = new PublicKey("GQmrfB8SpqU4Z563tUT9V4FdUV78NAERWERUoGqGRyeb");
 
   const instruction = {
     program_id: PRESALE_PROGRAM_ID,
     accounts: [
-      // 0. signer: The 3rd party service's wallet that is SENDING the SOL (Must be a signer)
+      // 0. signer (mutable, signer) - PDA Payer (FQHiHAx...)
       { address: signer, is_signer: true, is_writable: true },
 
-      // 1. user: The customer's address (PDA seed)
+      // 2. user (read-only) - PDA Seed (2cU8waWn5...)
       { address: userPublicKey, is_signer: false, is_writable: false },
 
-      // 2. vault_wallet: The wallet RECEIVING the SOL from the CPI
+      // 3. vault_wallet (mutable) - RECEIVER of SOL (FycJCFpjV...)
       { address: vault_address, is_signer: false, is_writable: true },
 
-      // 3. user_account: The PDA for state storage
+      // 4. user_account (mutable) - Derived PDA
       { address: userAccountPDA, is_signer: false, is_writable: true },
 
-      // 4. system_program
+      // 5. system_program (read-only)
       { address: SystemProgram.programId, is_signer: false, is_writable: false },
     ],
     data: instructionData,

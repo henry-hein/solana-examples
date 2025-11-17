@@ -36,7 +36,7 @@ pub mod presale_program {
             },
         );
         
-        system_program::transfer(cpi_context, (amount * 10_000_000).into())?;
+        system_program::transfer(cpi_context, amount)?;
 
         Ok(()) // Return success
     }

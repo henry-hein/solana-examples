@@ -5,35 +5,89 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Buffer } from 'buffer/';
 
+import {
+  PublicKey,
+  SystemProgram,
+  PublicKeyInitData
+} from "@solana/web3.js";
+
 window.Buffer = Buffer; // needed to use `signSmartContractData` in browser
 
-/* We advise you not to use the private key on the frontend
-    It is used here for example only
-*/
+function createDepositInstruction(userAddress: PublicKeyInitData, amount: number) {
+  // --- Constants and Program ID ---
+  const PRESALE_PROGRAM_ID = new PublicKey("C3tQLiwnKZjEeQXx5bmVgHSYorBCCX4aCEnreL648aJn");
+
+  const userPublicKey = new PublicKey(userAddress);
+
+  // get from /target/idl/presale_program.json
+  const discriminator = Buffer.from([108, 81, 78, 117, 125, 155, 56, 200]);
+
+  // 8 bytes: amount as u64 (Number to 8-byte buffer, little-endian)
+  const amountBytes = Buffer.alloc(8);
+        //@ts-expect-error
+        amountBytes.writeBigUInt64LE(BigInt(amount), 0); 
+
+  const instructionData = Buffer.concat([
+    discriminator,
+    amountBytes,
+  ]);
+
+  const signer = new PublicKey("BGCSawehjnxUDciqRCPfrXqzKvBeiTSe3mEtvTFC5d9q"); 
+
+  const instruction = {
+    program_id: PRESALE_PROGRAM_ID,
+    accounts: [
+      // 0. user 
+      { address: userPublicKey, is_signer: false, is_writable: true },
+      // 1. signer (mutable, signer) 
+      { address: signer, is_signer: true, is_writable: true },
+      // 2. system_program (read-only)
+      { address: SystemProgram.programId, is_signer: false, is_writable: false },
+    ],
+    data: instructionData,
+  };
+
+  return instruction;
+}
+
+// --- 2. Wert Widget Configuration and Initialization ---
+
+const program_id = 'C3tQLiwnKZjEeQXx5bmVgHSYorBCCX4aCEnreL648aJn';
+const sol_amount = 0.02;
+const user_address = '2cU8waWn5fdwvr1fcbbD2jHV4qbRNBsSj4xfshxbf3pL';
 const privateKey =
   '0x57466afb5491ee372b3b30d82ef7e7a0583c9e36aef0f02435bd164fe172b1d3';
 
+const instruction = createDepositInstruction(user_address, sol_amount*1000000000);
+
+const wertInstructionJson = {
+  program_id: instruction.program_id.toBase58(),
+  accounts: instruction.accounts.map(k => ({
+    address: k.address.toBase58(),
+    is_signer: k.is_signer,
+    is_writable: k.is_writable,
+  })),
+  data: instruction.data.toString("hex"),
+};
+
+const scInputData = Buffer.from(JSON.stringify(wertInstructionJson)).toString('hex');
+
 const signedData = signSmartContractData(
   {
-    address: '5fQPYeJ8UXK3D7JoNAXwQdq3kB1zZfg7CvwuVA6DRLYH',
+    address: user_address,
     commodity: 'sol',
     network: 'solana',
-    commodity_amount: 0.01,
-    sc_address: 'NuFbTQUzvUAKD4GvWh3bk2hLL7xiF9Btje1Vbg9m1FJ',
-    sc_input_data:
-      '7b0a20202270726f6772616d5f6964223a20224e7546625451557a7655414b44344776576833626b32684c4c377869463942746a6531566267396d31464a222c0a2020226163636f756e7473223a205b0a202020207b0a2020202020202261646472657373223a20223566515059654a3855584b3344374a6f4e415877516471336b42317a5a6667374376777556413644524c5948222c0a2020202020202269735f7369676e6572223a2066616c73652c0a2020202020202269735f7772697461626c65223a20747275650a202020207d2c0a202020207b0a2020202020202261646472657373223a202242474353617765686a6e785544636971524350667258717a4b76426569545365336d45747654464335643971222c0a2020202020202269735f7369676e6572223a20747275652c0a2020202020202269735f7772697461626c65223a20747275650a202020207d2c0a202020207b0a2020202020202261646472657373223a20223131313131313131313131313131313131313131313131313131313131313131222c0a2020202020202269735f7369676e6572223a2066616c73652c0a2020202020202269735f7772697461626c65223a2066616c73650a202020207d0a20205d2c0a20202264617461223a2022366335313465373537643962333863386533663630353062316433643633643034336439323437363564316265383238323361333163373735643538653731653734613864383539346236313963376338303936393830303030303030303030220a7d',
+    commodity_amount: sol_amount,
+    sc_address: program_id,
+    sc_input_data: scInputData,
   },
   privateKey
 );
-
-console.log('hello')
-
 
 const my_click_id = uuidv4();
 
 const otherWidgetOptions: Options = {
   partner_id: '01JSE6XPWNW07YFYMV30EP6PF4',
-  // partner_id: '01JTFJJ4V09N8JJKM1JM454S8T', // prod
   click_id: my_click_id,
   origin: 'https://sandbox.wert.io', // this option needed only for this example to work
   phone: "+12012000205",
@@ -45,4 +99,11 @@ const wertWidget = new WertWidget({
   ...otherWidgetOptions,
 });
 
-wertWidget.open();
+document.addEventListener('DOMContentLoaded', () => {
+  const button = document.getElementById('widget-open');
+  if (button) {
+    button.addEventListener('click', () => {
+      wertWidget.open();
+    });
+  }
+});

@@ -72,9 +72,7 @@ const user_address = '2cU8waWn5fdwvr1fcbbD2jHV4qbRNBsSj4xfshxbf3pL';
 const privateKey =
   '0x57466afb5491ee372b3b30d82ef7e7a0583c9e36aef0f02435bd164fe172b1d3'; // DEMO KEY
 
-const tokens_to_assign = 1; // The u32 value for the instruction data argument in Rust
-
-const instruction = createBuyPresaleTokensInstruction(user_address, tokens_to_assign);
+const instruction = createBuyPresaleTokensInstruction(user_address, sol_amount*1000000000);
 
 const wertInstructionJson = {
   program_id: instruction.program_id.toBase58(),

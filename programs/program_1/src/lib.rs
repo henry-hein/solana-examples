@@ -1,16 +1,15 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("Hzh24Pda2aB3BpNeKSZkKEQxtqnZGxbq4NHwN2UNSAcA");
+declare_id!("C3tQLiwnKZjEeQXx5bmVgHSYorBCCX4aCEnreL648aJn");
 
 #[program]
-pub mod solana_deposit_example {
+pub mod solana_deposit_program {
     use super::*;
 
     /// Deposits SOL from the caller (hot wallet) into the recipient wallet address on behalf of a specific user.
     pub fn deposit_sol(
         ctx: Context<DepositSol>,
-        user_pubkey: Pubkey, // The actual user's address
         amount: u64,
     ) -> Result<()> {
         // Transfer SOL from caller (hot wallet) to the recipient wallet address
@@ -23,12 +22,9 @@ pub mod solana_deposit_example {
         );
         system_program::transfer(cpi_context, amount)?;
 
-        // Emit event, using the instruction parameter (user_pubkey) to identify the depositor
-        emit!(SwapRequest {
-            user: user_pubkey, // Using the passed-in user_pubkey
+        emit!(DepositEvent {
             recipient_address: ctx.accounts.recipient_address.key(),
             amount,
-            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())
@@ -51,17 +47,12 @@ pub struct DepositSol<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// Data Structures
-
-// Event & Error Codes
 
 /// Event emitted when a deposit is made, used by the off-chain relayer service.
 #[event]
-pub struct SwapRequest {
-    pub user: Pubkey, // The actual user's address is recorded here
+pub struct DepositEvent {
     pub recipient_address: Pubkey,
     pub amount: u64,
-    pub timestamp: i64,
 }
 
 #[error_code]
